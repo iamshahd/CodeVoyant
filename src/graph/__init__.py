@@ -8,9 +8,9 @@ from .dependency_graph import DependencyGraphExtractor
 from .serializer import GraphSerializer
 
 __all__ = [
-    'CodeAnalyzer',
-    'analyze_repository',
-    'CallGraphExtractor',
-    'DependencyGraphExtractor',
-    'GraphSerializer',
+    "CodeAnalyzer",
+    "analyze_repository",
+    "CallGraphExtractor",
+    "DependencyGraphExtractor",
+    "GraphSerializer",
 ]
