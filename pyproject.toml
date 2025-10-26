@@ -4,4 +4,10 @@ version = "0.1.0"
 description = "Code graph visualization tool"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "networkx>=3.0",
+    "pyan3>=1.2.0",
+    "astroid>=3.0.0",
+    "pytest>=7.0.0",
+    "pylint>=2.15.0",
+]
