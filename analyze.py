@@ -106,7 +106,7 @@ Examples:
             analyzer = CodeAnalyzer(args.repo, args.output)
 
             print("\nExtracting graphs...")
-            graphs = analyzer.analyze(
+            _ = analyzer.analyze(
                 extract_dependencies=extract_dependencies,
                 extract_calls=extract_calls,
                 entry_points=args.entry_points,

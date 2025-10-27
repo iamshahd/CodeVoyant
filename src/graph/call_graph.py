@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import networkx as nx
-from pyan.analyzer import CallGraphVisitor as PyanVis  # type: ignore[import-untyped]
+from pyan.analyzer import CallGraphVisitor as PyanVisit  # type: ignore[import-untyped]
 from pyan.visgraph import VisualGraph  # type: ignore[import-untyped]
 
 
@@ -121,7 +121,7 @@ class CallGraphExtractor:
                 tree = ast.parse(content, filename=py_file)
 
                 # Create visitor and analyze
-                visitor = PyanVis(py_file, vis_graph)
+                visitor = PyanVisit(py_file, vis_graph)
                 visitor.visit(tree)
 
             except Exception as e:

@@ -2,17 +2,25 @@
 
 
 ## Quick Start
-
+For Setup:
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # On Windows use `.venv\Scripts\Activate.ps1`
 pip install uv
 uv sync --active
 ```
+To analyze a repository and generate graphs:
+```bash
+uv run analyze.py --repo <path_to_repo> --output <output_directory> 
+```
+To run the Streamlit app:
+```bash
+uv run streamlit run src/ui/app.py
+```
 
 
 ## Development
-Same as quick start but
+After finishing the quick start, install development dependencies:
 ```bash
 uv pip install ruff mypy types-networkx
 ```
