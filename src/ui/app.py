@@ -19,11 +19,12 @@ def _cleanup_temp_files():
 
 
 atexit.register(_cleanup_temp_files)
+st.set_page_config(layout="wide", page_title="CodeVoyant")
 
 
 def main():
     st.title("Graph Visualization with Pyvis")
-
+    
     # File uploader
     uploaded_file = st.file_uploader("Upload a graph file (JSON format)", type=["json"])
 
