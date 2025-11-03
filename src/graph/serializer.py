@@ -53,7 +53,7 @@ class GraphSerializer:
         Returns:
             Dictionary in node-link format
         """
-        return json_graph.node_link_data(graph)
+        return json_graph.node_link_data(graph, edges="links")
 
     @staticmethod
     def _to_cytoscape(graph: nx.DiGraph) -> Dict:
