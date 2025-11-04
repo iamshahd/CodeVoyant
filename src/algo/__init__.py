@@ -10,21 +10,21 @@ This module provides various community detection algorithms including:
 Basic usage:
     >>> from src.algo import detect_communities, analyze_communities
     >>> import networkx as nx
-    >>> 
+    >>>
     >>> # Create or load a graph
     >>> graph = nx.karate_club_graph()
-    >>> 
+    >>>
     >>> # Detect communities
     >>> communities = detect_communities(graph, algorithm='louvain')
     >>> print(f"Found {len(communities)} communities")
-    >>> 
+    >>>
     >>> # Analyze the communities
     >>> analyzer = analyze_communities(graph, communities)
     >>> print(f"Modularity: {analyzer.get_modularity():.4f}")
 
 Advanced usage:
     >>> from src.algo import CommunityDetectionFactory, CommunityAnalyzer
-    >>> 
+    >>>
     >>> # Create a specific algorithm with custom parameters
     >>> detector = CommunityDetectionFactory.create(
     ...     'louvain',
@@ -34,7 +34,7 @@ Advanced usage:
     ... )
     >>> communities = detector.detect_communities()
     >>> stats = detector.get_community_stats()
-    >>> 
+    >>>
     >>> # Compare multiple algorithms
     >>> from src.algo import compare_algorithms
     >>> results = compare_algorithms(graph, algorithms=['louvain', 'label_propagation'])

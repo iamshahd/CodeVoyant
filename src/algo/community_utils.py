@@ -2,10 +2,17 @@
 Utilities for analyzing and visualizing communities.
 """
 
-from typing import Dict, List, Set, Optional, Any, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Set
 
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
+from sklearn.metrics import (  # type: ignore[import-untyped]
+    adjusted_rand_score,
+    normalized_mutual_info_score,
+)
 
 
 class CommunityAnalyzer:
@@ -72,14 +79,14 @@ class CommunityAnalyzer:
         """
         if len(community) <= 1:
             return 0.0
-        
+
         subgraph = self.graph.subgraph(community)
         return nx.density(subgraph)
 
     def get_conductance(self, community: Set[str]) -> float:
         """
         Calculate the conductance of a community.
-        
+
         Conductance measures the ratio of edges leaving the community
         to the total edges connected to the community.
         Lower values indicate better communities.
@@ -93,10 +100,10 @@ class CommunityAnalyzer:
         internal = self.get_internal_edges(community)
         external = self.get_external_edges(community)
         total = 2 * internal + external
-        
+
         if total == 0:
             return 0.0
-        
+
         return external / total
 
     def get_community_metrics(self, comm_id: int) -> Dict[str, Any]:
@@ -110,7 +117,7 @@ class CommunityAnalyzer:
             Dictionary of metrics
         """
         community = self.communities[comm_id]
-        
+
         return {
             "community_id": comm_id,
             "size": len(community),
@@ -127,10 +134,7 @@ class CommunityAnalyzer:
         Returns:
             List of metric dictionaries, one per community
         """
-        return [
-            self.get_community_metrics(i)
-            for i in range(len(self.communities))
-        ]
+        return [self.get_community_metrics(i) for i in range(len(self.communities))]
 
     def get_modularity(self) -> float:
         """
@@ -144,7 +148,7 @@ class CommunityAnalyzer:
     def get_coverage(self) -> float:
         """
         Calculate coverage of the partition.
-        
+
         Coverage is the fraction of edges that fall within communities.
 
         Returns:
@@ -155,7 +159,7 @@ class CommunityAnalyzer:
     def get_performance(self) -> float:
         """
         Calculate performance of the partition.
-        
+
         Performance is the ratio of correctly classified pairs
         (both in same community or both in different communities).
 
@@ -165,8 +169,7 @@ class CommunityAnalyzer:
         return nx.community.partition_quality(self.graph, self.communities)[1]
 
     def compare_communities(
-        self,
-        other_communities: List[Set[str]]
+        self, other_communities: List[Set[str]]
     ) -> Dict[str, float]:
         """
         Compare two community partitions using various similarity metrics.
@@ -179,37 +182,22 @@ class CommunityAnalyzer:
         """
         # Convert to label format for comparison
         nodes = sorted(self.graph.nodes())
-        
+
         labels1 = [self.node_to_community.get(node, -1) for node in nodes]
-        
+
         other_mapping = {}
         for comm_id, community in enumerate(other_communities):
             for node in community:
                 other_mapping[node] = comm_id
         labels2 = [other_mapping.get(node, -1) for node in nodes]
 
-        # Use scikit-learn metrics if available, otherwise basic comparison
-        try:
-            from sklearn.metrics import (
-                adjusted_rand_score,
-                normalized_mutual_info_score,
-            )
-            
-            return {
-                "adjusted_rand_index": adjusted_rand_score(labels1, labels2),
-                "normalized_mutual_info": normalized_mutual_info_score(labels1, labels2),
-            }
-        except ImportError:
-            # Fallback to simple overlap metric
-            overlap = sum(1 for l1, l2 in zip(labels1, labels2) if l1 == l2)
-            return {
-                "agreement_ratio": overlap / len(nodes) if nodes else 0.0,
-            }
+        return {
+            "adjusted_rand_index": adjusted_rand_score(labels1, labels2),
+            "normalized_mutual_info": normalized_mutual_info_score(labels1, labels2),
+        }
 
     def export_communities(
-        self,
-        output_path: str,
-        include_metrics: bool = True
+        self, output_path: str, include_metrics: bool = True
     ) -> None:
         """
         Export communities to a file.
@@ -220,23 +208,23 @@ class CommunityAnalyzer:
         """
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(output, "w") as f:
             f.write("# Community Detection Results\n\n")
             f.write(f"Total communities: {len(self.communities)}\n")
             f.write(f"Total nodes: {self.graph.number_of_nodes()}\n")
             f.write(f"Total edges: {self.graph.number_of_edges()}\n")
             f.write(f"Modularity: {self.get_modularity():.4f}\n\n")
-            
+
             for comm_id, community in enumerate(self.communities):
                 f.write(f"\n## Community {comm_id}\n")
                 f.write(f"Size: {len(community)}\n")
-                
+
                 if include_metrics:
                     metrics = self.get_community_metrics(comm_id)
                     f.write(f"Density: {metrics['density']:.4f}\n")
                     f.write(f"Conductance: {metrics['conductance']:.4f}\n")
-                
+
                 f.write("Members:\n")
                 for node in sorted(community):
                     f.write(f"  - {node}\n")
@@ -277,37 +265,21 @@ class CommunityVisualizer:
         Returns:
             Dictionary mapping node IDs to color strings
         """
-        try:
-            import matplotlib.pyplot as plt
-            import matplotlib.colors as mcolors
-            
-            num_communities = len(self.communities)
-            cmap = plt.get_cmap(colormap)
-            
-            # Generate colors for communities
-            colors = [
-                mcolors.rgb2hex(cmap(i / max(num_communities - 1, 1)))
-                for i in range(num_communities)
-            ]
-            
-            # Map nodes to colors
-            node_colors = {}
-            for node, comm_id in self.node_to_community.items():
-                node_colors[node] = colors[comm_id]
-            
-            return node_colors
-            
-        except ImportError:
-            # Fallback to simple color scheme
-            simple_colors = [
-                "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00",
-                "#ffff33", "#a65628", "#f781bf", "#999999", "#66c2a5"
-            ]
-            node_colors = {}
-            for node, comm_id in self.node_to_community.items():
-                node_colors[node] = simple_colors[comm_id % len(simple_colors)]
-            
-            return node_colors
+        num_communities = len(self.communities)
+        cmap = plt.get_cmap(colormap)
+
+        # Generate colors for communities
+        colors = [
+            mcolors.rgb2hex(cmap(i / max(num_communities - 1, 1)))
+            for i in range(num_communities)
+        ]
+
+        # Map nodes to colors
+        node_colors = {}
+        for node, comm_id in self.node_to_community.items():
+            node_colors[node] = colors[comm_id]
+
+        return node_colors
 
     def add_community_attributes(self) -> nx.Graph:
         """
@@ -317,10 +289,10 @@ class CommunityVisualizer:
             Graph with 'community' attribute on each node
         """
         g = self.graph.copy()
-        
+
         for node, comm_id in self.node_to_community.items():
             g.nodes[node]["community"] = comm_id
-        
+
         return g
 
     def create_community_subgraphs(self) -> List[nx.Graph]:
@@ -331,18 +303,16 @@ class CommunityVisualizer:
             List of subgraphs, one per community
         """
         subgraphs = []
-        
+
         for community in self.communities:
             subgraph = self.graph.subgraph(community).copy()
             subgraphs.append(subgraph)
-        
+
         return subgraphs
 
     def get_layout_with_communities(
-        self,
-        layout: str = "spring",
-        **layout_kwargs: Any
-    ) -> Dict[str, Tuple[float, float]]:
+        self, layout: str = "spring", **layout_kwargs: Any
+    ) -> dict[Any, np.ndarray[tuple[int], np.dtype[np.float64]]]:
         """
         Generate a graph layout that considers community structure.
 
@@ -355,14 +325,11 @@ class CommunityVisualizer:
         """
         if layout == "spring":
             # Use communities to bias the layout
-            pos = nx.spring_layout(
-                self.graph,
-                **layout_kwargs
-            )
+            pos = nx.spring_layout(self.graph, **layout_kwargs)
         elif layout == "kamada_kawai":
             pos = nx.kamada_kawai_layout(self.graph, **layout_kwargs)
         else:
             # Default to spring layout
             pos = nx.spring_layout(self.graph, **layout_kwargs)
-        
+
         return pos

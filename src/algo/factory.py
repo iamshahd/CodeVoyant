@@ -30,10 +30,7 @@ class CommunityDetectionFactory:
 
     @classmethod
     def create(
-        cls,
-        algorithm: str,
-        graph: nx.Graph,
-        **kwargs: Any
+        cls, algorithm: str, graph: nx.Graph, **kwargs: Any
     ) -> CommunityDetectionAlgorithm:
         """
         Create a community detection algorithm instance.
@@ -69,9 +66,7 @@ class CommunityDetectionFactory:
 
     @classmethod
     def register_algorithm(
-        cls,
-        name: str,
-        algorithm_class: type[CommunityDetectionAlgorithm]
+        cls, name: str, algorithm_class: type[CommunityDetectionAlgorithm]
     ) -> None:
         """
         Register a custom community detection algorithm.
@@ -84,14 +79,12 @@ class CommunityDetectionFactory:
             raise ValueError(
                 "Algorithm class must inherit from CommunityDetectionAlgorithm"
             )
-        
+
         cls._algorithms[name] = algorithm_class
 
 
 def detect_communities(
-    graph: nx.Graph,
-    algorithm: str = "louvain",
-    **kwargs: Any
+    graph: nx.Graph, algorithm: str = "louvain", **kwargs: Any
 ) -> List[Set[str]]:
     """
     Convenience function to detect communities in a graph.
@@ -113,8 +106,7 @@ def detect_communities(
 
 
 def analyze_communities(
-    graph: nx.Graph,
-    communities: List[Set[str]]
+    graph: nx.Graph, communities: List[Set[str]]
 ) -> CommunityAnalyzer:
     """
     Convenience function to create a community analyzer.
@@ -135,8 +127,7 @@ def analyze_communities(
 
 
 def visualize_communities(
-    graph: nx.Graph,
-    communities: List[Set[str]]
+    graph: nx.Graph, communities: List[Set[str]]
 ) -> CommunityVisualizer:
     """
     Convenience function to create a community visualizer.
@@ -157,9 +148,7 @@ def visualize_communities(
 
 
 def compare_algorithms(
-    graph: nx.Graph,
-    algorithms: Optional[List[str]] = None,
-    **shared_kwargs: Any
+    graph: nx.Graph, algorithms: Optional[List[str]] = None, **shared_kwargs: Any
 ) -> Dict[str, Dict[str, Any]]:
     """
     Compare multiple community detection algorithms on the same graph.
@@ -178,7 +167,7 @@ def compare_algorithms(
         ...     print(f"{algo}: {stats['num_communities']} communities, modularity={stats['modularity']:.4f}")
     """
     import time
-    
+
     if algorithms is None:
         algorithms = CommunityDetectionFactory.available_algorithms()
 
@@ -187,19 +176,17 @@ def compare_algorithms(
     for algo_name in algorithms:
         try:
             start_time = time.perf_counter()
-            
+
             detector = CommunityDetectionFactory.create(
-                algo_name,
-                graph,
-                **shared_kwargs
+                algo_name, graph, **shared_kwargs
             )
             communities = detector.detect_communities()
-            
+
             end_time = time.perf_counter()
             runtime = end_time - start_time
-            
+
             stats = detector.get_community_stats()
-            
+
             results[algo_name] = {
                 "communities": communities,
                 "num_communities": stats["num_communities"],
@@ -211,8 +198,6 @@ def compare_algorithms(
                 "algorithm_params": detector.params,
             }
         except Exception as e:
-            results[algo_name] = {
-                "error": str(e)
-            }
+            results[algo_name] = {"error": str(e)}
 
     return results
