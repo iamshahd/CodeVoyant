@@ -13,4 +13,5 @@ dependencies = [
     "streamlit>=1.50.0",
     "pyvis>=0.3.2",
     "matplotlib>=3.10.7",
+    "scikit-learn>=1.7.2",
 ]
