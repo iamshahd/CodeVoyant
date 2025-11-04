@@ -1,7 +1,3 @@
-"""
-Louvain community detection algorithm implementation.
-"""
-
 from typing import Any, Callable, Dict, List, Optional, Set
 
 import networkx as nx
