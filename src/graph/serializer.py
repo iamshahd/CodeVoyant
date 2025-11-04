@@ -142,7 +142,27 @@ class GraphSerializer:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        nx.write_graphml(graph, output_path)
+        # Create a clean copy of the graph without None values
+        # GraphML doesn't support None as data values
+        clean_graph = graph.copy()
+
+        # Clean node attributes
+        for node in clean_graph.nodes():
+            node_data = clean_graph.nodes[node]
+            # Remove None values from node attributes
+            keys_to_remove = [key for key, value in node_data.items() if value is None]
+            for key in keys_to_remove:
+                del node_data[key]
+
+        # Clean edge attributes
+        for source, target in clean_graph.edges():
+            edge_data = clean_graph[source][target]
+            # Remove None values from edge attributes
+            keys_to_remove = [key for key, value in edge_data.items() if value is None]
+            for key in keys_to_remove:
+                del edge_data[key]
+
+        nx.write_graphml(clean_graph, output_path)
         print(f"Graph saved to {output_path}")
 
     @staticmethod
@@ -157,7 +177,26 @@ class GraphSerializer:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        nx.write_gexf(graph, output_path)
+        # Create a clean copy of the graph without None values
+        clean_graph = graph.copy()
+
+        # Clean node attributes
+        for node in clean_graph.nodes():
+            node_data = clean_graph.nodes[node]
+            # Remove None values from node attributes
+            keys_to_remove = [key for key, value in node_data.items() if value is None]
+            for key in keys_to_remove:
+                del node_data[key]
+
+        # Clean edge attributes
+        for source, target in clean_graph.edges():
+            edge_data = clean_graph[source][target]
+            # Remove None values from edge attributes
+            keys_to_remove = [key for key, value in edge_data.items() if value is None]
+            for key in keys_to_remove:
+                del edge_data[key]
+
+        nx.write_gexf(clean_graph, output_path)
         print(f"Graph saved to {output_path}")
 
     @staticmethod
