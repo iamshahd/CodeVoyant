@@ -15,15 +15,6 @@ from src.benchmark.loader import GraphLoader
 from src.benchmark.plotter import BenchmarkPlotter
 from src.benchmark.runner import BenchmarkRunner
 
-DEFAULT_GRAPH_FILES = [
-    "codevoyant_output/httpx/call_graph.json",
-    "codevoyant_output/httpx/dependency_graph.json",
-    "codevoyant_output/rich/call_graph.json",
-    "codevoyant_output/rich/dependency_graph.json",
-    "codevoyant_output/django/call_graph.json",
-    "codevoyant_output/django/dependency_graph.json",
-]
-
 
 def get_root_dir() -> Path:
     """
@@ -34,6 +25,40 @@ def get_root_dir() -> Path:
     """
     # Assuming this script is in src/benchmark/run.py
     return Path(__file__).parent.parent.parent
+
+
+def discover_graph_files(root_dir: Path) -> list[Path]:
+    """
+    Automatically discover call_graph.json and dependency_graph.json files
+    in subdirectories of codevoyant_output.
+
+    Args:
+        root_dir: Root directory of the project
+
+    Returns:
+        List of paths to discovered graph files
+    """
+    output_dir = root_dir / "codevoyant_output"
+    graph_files: list[Path] = []
+
+    if not output_dir.exists():
+        print(f"Warning: Directory {output_dir} does not exist")
+        return graph_files
+
+    # Iterate through subdirectories
+    for subdir in output_dir.iterdir():
+        if subdir.is_dir():
+            # Check for call_graph.json
+            call_graph = subdir / "call_graph.json"
+            if call_graph.exists():
+                graph_files.append(call_graph)
+
+            # Check for dependency_graph.json
+            dep_graph = subdir / "dependency_graph.json"
+            if dep_graph.exists():
+                graph_files.append(dep_graph)
+
+    return sorted(graph_files)
 
 
 def save_results_to_json(results, output_path: Path):
@@ -79,7 +104,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with default graph files
+  # Run with auto-discovered graph files from codevoyant_output
   python -m src.benchmark.run
   
   # Run with custom graph files
@@ -93,7 +118,7 @@ Examples:
     parser.add_argument(
         "--files",
         nargs="+",
-        help="List of JSON graph files to benchmark (default: predefined set)",
+        help="List of JSON graph files to benchmark (if not provided, auto-discovers files in codevoyant_output)",
     )
 
     parser.add_argument(
@@ -110,7 +135,14 @@ Examples:
     if args.files:
         graph_files = [Path(f) for f in args.files]
     else:
-        graph_files = [root_dir / f for f in DEFAULT_GRAPH_FILES]
+        # Auto-discover graph files
+        graph_files = discover_graph_files(root_dir)
+        if not graph_files:
+            print("Error: No graph files found in codevoyant_output subdirectories")
+            print(
+                "Please ensure subdirectories contain call_graph.json or dependency_graph.json files"
+            )
+            sys.exit(1)
 
     # Validate that all files exist
     missing_files = [f for f in graph_files if not f.exists()]

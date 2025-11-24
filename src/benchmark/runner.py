@@ -76,8 +76,8 @@ class BenchmarkRunner:
         num_edges = graph.number_of_edges()
 
         for algorithm in BenchmarkRunner.ALGORITHMS:
-            # Skip Girvan-Newman for graphs with 1000+ nodes (too slow)
-            if algorithm == "girvan_newman" and num_nodes >= 1000:
+            # Skip Girvan-Newman for graphs with 500+ nodes (too slow)
+            if algorithm == "girvan_newman" and num_nodes >= 500:
                 print(f"  {algorithm}: Skipped (graph too large: {num_nodes} nodes)")
                 continue
 
