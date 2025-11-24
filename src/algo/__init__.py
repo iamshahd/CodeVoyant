@@ -42,24 +42,26 @@ Advanced usage:
 
 from .base import CommunityDetectionAlgorithm
 from .community_detection import (
-    LouvainCommunityDetection,
-    LabelPropagationCommunityDetection,
-    GreedyModularityCommunityDetection,
     GirvanNewmanCommunityDetection,
+    GreedyModularityCommunityDetection,
+    LabelPropagationCommunityDetection,
+    LouvainLibrary,
 )
 from .community_utils import CommunityAnalyzer, CommunityVisualizer
 from .factory import (
     CommunityDetectionFactory,
-    detect_communities,
     analyze_communities,
-    visualize_communities,
     compare_algorithms,
+    detect_communities,
+    visualize_communities,
 )
+from .louvain import LouvainCommunityDetection
 
 __all__ = [
     # Base class
     "CommunityDetectionAlgorithm",
     # Algorithm implementations
+    "LouvainLibrary",
     "LouvainCommunityDetection",
     "LabelPropagationCommunityDetection",
     "GreedyModularityCommunityDetection",
