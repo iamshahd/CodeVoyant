@@ -80,6 +80,8 @@ def save_results_to_json(results, output_path: Path):
                 "execution_time": result.execution_time,
                 "num_communities": result.num_communities,
                 "modularity": result.modularity,
+                "density": result.density,
+                "conductance": result.conductance,
             }
             for result in results
         ],
@@ -202,9 +204,9 @@ Examples:
     print(f"\nResults saved to: {output_dir}")
     print("\nGenerated files:")
     print(f"  - {output_dir / 'benchmark_results.json'}")
-    print(f"  - {output_dir / 'benchmark_execution_time_vs_nodes.png'}")
-    print(f"  - {output_dir / 'benchmark_execution_time_vs_edges.png'}")
-    print(f"  - {output_dir / 'benchmark_modularity_comparison.png'}")
+    print(f"  - {output_dir / 'benchmark_modularity_scatter.png'}")
+    print(f"  - {output_dir / 'benchmark_density_scatter.png'}")
+    print(f"  - {output_dir / 'benchmark_conductance_scatter.png'}")
     print("\n" + "=" * 70)
 
 

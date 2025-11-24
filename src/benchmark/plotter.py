@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from .runner import BenchmarkResult
 
@@ -14,314 +15,212 @@ class BenchmarkPlotter:
     """Creates visualizations of benchmark results."""
 
     @staticmethod
-    def plot_execution_time_vs_nodes(
-        results: List[BenchmarkResult], output_path: Path
-    ) -> None:
+    def _extract_common_repos_data(results: List[BenchmarkResult], metric: str):
         """
-        Plot execution time vs number of nodes.
+        Extract metric data for repos where both algorithms were run.
 
         Args:
             results: List of BenchmarkResult objects
-            output_path: Path to save the plot
+            metric: Name of the metric attribute (e.g., 'modularity', 'density', 'conductance')
+
+        Returns:
+            Tuple of (louvain_values, girvan_newman_values) as lists
         """
-        # Separate results by algorithm and graph type
-        louvain_call = []
-        louvain_dep = []
-        girvan_call = []
-        girvan_dep = []
-
-        for result in results:
-            if result.algorithm == "louvain":
-                if result.graph_type == "call_graph":
-                    louvain_call.append(result)
-                else:
-                    louvain_dep.append(result)
-            else:  # girvan_newman
-                if result.graph_type == "call_graph":
-                    girvan_call.append(result)
-                else:
-                    girvan_dep.append(result)
-
-        # Create figure with two subplots
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-        # Plot for call graphs
-        BenchmarkPlotter._plot_single_graph_type(
-            ax1, louvain_call, girvan_call, "Call Graphs", "num_nodes"
-        )
-
-        # Plot for dependency graphs
-        BenchmarkPlotter._plot_single_graph_type(
-            ax2, louvain_dep, girvan_dep, "Dependency Graphs", "num_nodes"
-        )
-
-        plt.tight_layout()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-        plt.close()
-        print(f"Saved plot to {output_path}")
-
-    @staticmethod
-    def plot_execution_time_vs_edges(
-        results: List[BenchmarkResult], output_path: Path
-    ) -> None:
-        """
-        Plot execution time vs number of edges.
-
-        Args:
-            results: List of BenchmarkResult objects
-            output_path: Path to save the plot
-        """
-        # Separate results by algorithm and graph type
-        louvain_call = []
-        louvain_dep = []
-        girvan_call = []
-        girvan_dep = []
-
-        for result in results:
-            if result.algorithm == "louvain":
-                if result.graph_type == "call_graph":
-                    louvain_call.append(result)
-                else:
-                    louvain_dep.append(result)
-            else:  # girvan_newman
-                if result.graph_type == "call_graph":
-                    girvan_call.append(result)
-                else:
-                    girvan_dep.append(result)
-
-        # Create figure with two subplots
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-        # Plot for call graphs
-        BenchmarkPlotter._plot_single_graph_type(
-            ax1, louvain_call, girvan_call, "Call Graphs", "num_edges"
-        )
-
-        # Plot for dependency graphs
-        BenchmarkPlotter._plot_single_graph_type(
-            ax2, louvain_dep, girvan_dep, "Dependency Graphs", "num_edges"
-        )
-
-        plt.tight_layout()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-        plt.close()
-        print(f"Saved plot to {output_path}")
-
-    @staticmethod
-    def _plot_single_graph_type(
-        ax,
-        louvain_results: List[BenchmarkResult],
-        girvan_results: List[BenchmarkResult],
-        title: str,
-        x_metric: str,
-    ) -> None:
-        """
-        Plot a single graph type (call or dependency).
-
-        Args:
-            ax: Matplotlib axis
-            louvain_results: Results for Louvain algorithm
-            girvan_results: Results for Girvan-Newman algorithm
-            title: Plot title
-            x_metric: 'num_nodes' or 'num_edges'
-        """
-        # Sort results by x_metric for proper line plotting
-        louvain_results = sorted(louvain_results, key=lambda r: getattr(r, x_metric))
-        girvan_results = sorted(girvan_results, key=lambda r: getattr(r, x_metric))
-
-        # Extract data for Louvain
-        louvain_x = [getattr(r, x_metric) for r in louvain_results]
-        louvain_y = [r.execution_time for r in louvain_results]
-        louvain_labels = [r.project_name for r in louvain_results]
-
-        # Extract data for Girvan-Newman
-        girvan_x = [getattr(r, x_metric) for r in girvan_results]
-        girvan_y = [r.execution_time for r in girvan_results]
-        girvan_labels = [r.project_name for r in girvan_results]
-
-        # Plot lines
-        ax.plot(
-            louvain_x,
-            louvain_y,
-            marker="o",
-            linewidth=2,
-            markersize=8,
-            label="Louvain",
-            color="#2E86AB",
-        )
-        ax.plot(
-            girvan_x,
-            girvan_y,
-            marker="s",
-            linewidth=2,
-            markersize=8,
-            label="Girvan-Newman",
-            color="#A23B72",
-        )
-
-        # Add labels for each point
-        for x, y, label in zip(louvain_x, louvain_y, louvain_labels):
-            ax.annotate(
-                label,
-                (x, y),
-                textcoords="offset points",
-                xytext=(0, 10),
-                ha="center",
-                fontsize=9,
-                color="#2E86AB",
-            )
-
-        for x, y, label in zip(girvan_x, girvan_y, girvan_labels):
-            ax.annotate(
-                label,
-                (x, y),
-                textcoords="offset points",
-                xytext=(0, -15),
-                ha="center",
-                fontsize=9,
-                color="#A23B72",
-            )
-
-        # Set labels and title
-        xlabel = "Number of Nodes" if x_metric == "num_nodes" else "Number of Edges"
-        ax.set_xlabel(xlabel, fontsize=12)
-        ax.set_ylabel("Execution Time (seconds)", fontsize=12)
-        ax.set_title(title, fontsize=14, fontweight="bold")
-        ax.legend(fontsize=11)
-        ax.grid(True, alpha=0.3)
-
-    @staticmethod
-    def plot_modularity_comparison(
-        results: List[BenchmarkResult], output_path: Path
-    ) -> None:
-        """
-        Plot modularity comparison for graphs where both algorithms ran.
-
-        Args:
-            results: List of BenchmarkResult objects
-            output_path: Path to save the plot
-        """
-        # Group results by project_name and graph_type
         from collections import defaultdict
         from typing import Dict, Tuple
 
+        # Group by (project_name, graph_type)
         grouped: Dict[Tuple[str, str], Dict[str, BenchmarkResult]] = defaultdict(dict)
         for result in results:
             key = (result.project_name, result.graph_type)
             grouped[key][result.algorithm] = result
 
-        # Filter to only include graphs where both algorithms ran
-        comparison_data = []
-        for (project_name, graph_type), algorithms in grouped.items():
-            if "louvain" in algorithms and "girvan_newman" in algorithms:
-                comparison_data.append(
-                    {
-                        "project_name": project_name,
-                        "graph_type": graph_type,
-                        "louvain_mod": algorithms["louvain"].modularity,
-                        "girvan_mod": algorithms["girvan_newman"].modularity,
-                        "num_nodes": algorithms["louvain"].num_nodes,
-                    }
+        # Find repos where both algorithms were run
+        louvain_values = []
+        girvan_newman_values = []
+
+        for key, algorithms in grouped.items():
+            if "girvan_newman" in algorithms and "louvain" in algorithms:
+                louvain_values.append(getattr(algorithms["louvain"], metric))
+                girvan_newman_values.append(
+                    getattr(algorithms["girvan_newman"], metric)
                 )
 
-        if not comparison_data:
-            print("  No graphs with both algorithms to compare modularity")
-            return
+        return louvain_values, girvan_newman_values
 
-        # Separate by graph type
-        call_graphs = [d for d in comparison_data if d["graph_type"] == "call_graph"]
-        dep_graphs = [
-            d for d in comparison_data if d["graph_type"] == "dependency_graph"
-        ]
+    @staticmethod
+    def _create_scatterplot(
+        louvain_values,
+        girvan_newman_values,
+        output_path: Path,
+        metric_name: str,
+        higher_is_better: bool,
+    ) -> None:
+        """
+        Create and save a scatter plot comparing the two algorithms.
 
-        # Create figure
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        Args:
+            louvain_values: List of metric values for Louvain algorithm
+            girvan_newman_values: List of metric values for Girvan-Newman algorithm
+            output_path: Path to save the plot
+            metric_name: Display name of the metric
+            higher_is_better: Whether higher values are better for this metric
+        """
+        fig, ax = plt.subplots(figsize=(10, 10))
 
-        # Plot call graphs
-        if call_graphs:
-            BenchmarkPlotter._plot_modularity_comparison_single(
-                ax1, call_graphs, "Call Graphs"
-            )
-        else:
-            ax1.text(
-                0.5,
-                0.5,
-                "No call graphs with both algorithms",
-                ha="center",
-                va="center",
-            )
-            ax1.set_title("Call Graphs", fontsize=14, fontweight="bold")
+        # Create scatter plot
+        ax.scatter(
+            louvain_values,
+            girvan_newman_values,
+            alpha=0.6,
+            s=100,
+            c="#4ECDC4",
+            edgecolors="black",
+            linewidth=1,
+        )
 
-        # Plot dependency graphs
-        if dep_graphs:
-            BenchmarkPlotter._plot_modularity_comparison_single(
-                ax2, dep_graphs, "Dependency Graphs"
-            )
-        else:
-            ax2.text(
-                0.5,
-                0.5,
-                "No dependency graphs with both algorithms",
-                ha="center",
-                va="center",
-            )
-            ax2.set_title("Dependency Graphs", fontsize=14, fontweight="bold")
+        # Add 45-degree reference line
+        min_val = min(min(louvain_values), min(girvan_newman_values))
+        max_val = max(max(louvain_values), max(girvan_newman_values))
+        ax.plot(
+            [min_val, max_val],
+            [min_val, max_val],
+            "k--",
+            linewidth=2,
+            label="Equal Performance (45° line)",
+            alpha=0.7,
+        )
 
+        # Add grid
+        ax.grid(True, linestyle="--", alpha=0.3)
+        ax.set_axisbelow(True)
+
+        # Labels and title
+        ax.set_xlabel(f"Louvain {metric_name}", fontsize=12, fontweight="bold")
+        ax.set_ylabel(f"Girvan-Newman {metric_name}", fontsize=12, fontweight="bold")
+
+        comparison_text = "Higher is Better" if higher_is_better else "Lower is Better"
+        ax.set_title(
+            f"{metric_name} Comparison: Girvan-Newman vs Louvain\n({comparison_text})",
+            fontsize=14,
+            fontweight="bold",
+            pad=20,
+        )
+
+        # Add legend
+        ax.legend(loc="upper left", fontsize=10)
+
+        # Add statistics text
+        correlation = np.corrcoef(louvain_values, girvan_newman_values)[0, 1]
+        stats_text = (
+            f"Statistics:\n"
+            f"  Correlation: {correlation:.4f}\n"
+            f"  Sample size: {len(louvain_values)}\n\n"
+            f"Louvain (x-axis):\n"
+            f"  Mean: {np.mean(louvain_values):.4f}\n"
+            f"  Std: {np.std(louvain_values):.4f}\n\n"
+            f"Girvan-Newman (y-axis):\n"
+            f"  Mean: {np.mean(girvan_newman_values):.4f}\n"
+            f"  Std: {np.std(girvan_newman_values):.4f}"
+        )
+
+        ax.text(
+            0.98,
+            0.02,
+            stats_text,
+            transform=ax.transAxes,
+            fontsize=9,
+            verticalalignment="bottom",
+            horizontalalignment="right",
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        )
+
+        # Make axes equal for better comparison
+        ax.set_aspect("equal", adjustable="box")
+
+        # Tight layout
         plt.tight_layout()
+
+        # Save figure
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
         plt.close()
         print(f"Saved plot to {output_path}")
 
     @staticmethod
-    def _plot_modularity_comparison_single(ax, data: list, title: str) -> None:
+    def plot_modularity_scatter(
+        results: List[BenchmarkResult], output_path: Path
+    ) -> None:
         """
-        Plot modularity comparison for a single graph type.
+        Create scatter plot comparing modularity scores between algorithms.
 
         Args:
-            ax: Matplotlib axis
-            data: List of dictionaries with comparison data
-            title: Plot title
+            results: List of BenchmarkResult objects
+            output_path: Path to save the plot
         """
-        # Sort by number of nodes
-        data = sorted(data, key=lambda d: d["num_nodes"])
-
-        x_positions = range(len(data))
-        louvain_mods = [d["louvain_mod"] for d in data]
-        girvan_mods = [d["girvan_mod"] for d in data]
-        labels = [d["project_name"] for d in data]
-
-        width = 0.35
-
-        # Create bars
-        ax.bar(
-            [x - width / 2 for x in x_positions],
-            louvain_mods,
-            width,
-            label="Louvain",
-            color="#2E86AB",
-            alpha=0.8,
-        )
-        ax.bar(
-            [x + width / 2 for x in x_positions],
-            girvan_mods,
-            width,
-            label="Girvan-Newman",
-            color="#A23B72",
-            alpha=0.8,
+        louvain_values, girvan_values = BenchmarkPlotter._extract_common_repos_data(
+            results, "modularity"
         )
 
-        # Customize plot
-        ax.set_xlabel("Project", fontsize=12)
-        ax.set_ylabel("Modularity", fontsize=12)
-        ax.set_title(title, fontsize=14, fontweight="bold")
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels(labels)
-        ax.legend(fontsize=11)
-        ax.grid(True, alpha=0.3, axis="y")
-        ax.set_ylim(0, max(max(louvain_mods), max(girvan_mods)) * 1.1)
+        if not louvain_values:
+            print("  No graphs with both algorithms to compare modularity")
+            return
+
+        BenchmarkPlotter._create_scatterplot(
+            louvain_values,
+            girvan_values,
+            output_path,
+            "Modularity",
+            higher_is_better=True,
+        )
+
+    @staticmethod
+    def plot_density_scatter(results: List[BenchmarkResult], output_path: Path) -> None:
+        """
+        Create scatter plot comparing density scores between algorithms.
+
+        Args:
+            results: List of BenchmarkResult objects
+            output_path: Path to save the plot
+        """
+        louvain_values, girvan_values = BenchmarkPlotter._extract_common_repos_data(
+            results, "density"
+        )
+
+        if not louvain_values:
+            print("  No graphs with both algorithms to compare density")
+            return
+
+        BenchmarkPlotter._create_scatterplot(
+            louvain_values, girvan_values, output_path, "Density", higher_is_better=True
+        )
+
+    @staticmethod
+    def plot_conductance_scatter(
+        results: List[BenchmarkResult], output_path: Path
+    ) -> None:
+        """
+        Create scatter plot comparing conductance scores between algorithms.
+
+        Args:
+            results: List of BenchmarkResult objects
+            output_path: Path to save the plot
+        """
+        louvain_values, girvan_values = BenchmarkPlotter._extract_common_repos_data(
+            results, "conductance"
+        )
+
+        if not louvain_values:
+            print("  No graphs with both algorithms to compare conductance")
+            return
+
+        BenchmarkPlotter._create_scatterplot(
+            louvain_values,
+            girvan_values,
+            output_path,
+            "Conductance",
+            higher_is_better=False,
+        )
 
     @staticmethod
     def generate_all_plots(results: List[BenchmarkResult], output_dir: Path) -> None:
@@ -332,18 +231,18 @@ class BenchmarkPlotter:
             results: List of BenchmarkResult objects
             output_dir: Directory to save plots
         """
-        print("\nGenerating plots...")
+        print("\nGenerating scatter plots...")
 
-        # Plot execution time vs nodes
-        nodes_plot_path = output_dir / "benchmark_execution_time_vs_nodes.png"
-        BenchmarkPlotter.plot_execution_time_vs_nodes(results, nodes_plot_path)
+        # Plot modularity scatter
+        modularity_plot_path = output_dir / "benchmark_modularity_scatter.png"
+        BenchmarkPlotter.plot_modularity_scatter(results, modularity_plot_path)
 
-        # Plot execution time vs edges
-        edges_plot_path = output_dir / "benchmark_execution_time_vs_edges.png"
-        BenchmarkPlotter.plot_execution_time_vs_edges(results, edges_plot_path)
+        # Plot density scatter
+        density_plot_path = output_dir / "benchmark_density_scatter.png"
+        BenchmarkPlotter.plot_density_scatter(results, density_plot_path)
 
-        # Plot modularity comparison
-        modularity_plot_path = output_dir / "benchmark_modularity_comparison.png"
-        BenchmarkPlotter.plot_modularity_comparison(results, modularity_plot_path)
+        # Plot conductance scatter
+        conductance_plot_path = output_dir / "benchmark_conductance_scatter.png"
+        BenchmarkPlotter.plot_conductance_scatter(results, conductance_plot_path)
 
         print("\nAll plots generated successfully!")
