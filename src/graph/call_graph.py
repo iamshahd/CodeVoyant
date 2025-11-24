@@ -39,7 +39,7 @@ class CallGraphExtractor:
             List of entry point file paths
         """
         entry_points = []
-        common_names = ["__main__.py", "main.py", "app.py", "run.py"]
+        common_names = ["__main__.py", "main.py", "app.py", "run.py", "_main.py"]
 
         for root, dirs, files in os.walk(self.repo_path):
             # Skip common directories
