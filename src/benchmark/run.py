@@ -7,6 +7,7 @@ and generates line plots showing execution time vs graph size.
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -33,6 +34,42 @@ def get_root_dir() -> Path:
     """
     # Assuming this script is in src/benchmark/run.py
     return Path(__file__).parent.parent.parent
+
+
+def save_results_to_json(results, output_path: Path):
+    """
+    Save benchmark results to a JSON file.
+
+    Args:
+        results: List of BenchmarkResult objects
+        output_path: Path to save the JSON file
+    """
+    json_data = {
+        "benchmark_results": [
+            {
+                "project_name": result.project_name,
+                "graph_type": result.graph_type,
+                "algorithm": result.algorithm,
+                "num_nodes": result.num_nodes,
+                "num_edges": result.num_edges,
+                "execution_time": result.execution_time,
+                "num_communities": result.num_communities,
+                "modularity": result.modularity,
+            }
+            for result in results
+        ],
+        "summary": {
+            "total_benchmarks": len(results),
+            "algorithms": list(set(r.algorithm for r in results)),
+            "projects": list(set(r.project_name for r in results)),
+        },
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(json_data, f, indent=2)
+
+    print(f"Saved benchmark results to {output_path}")
 
 
 def main():
@@ -111,6 +148,13 @@ Examples:
     print("=" * 70)
     results = BenchmarkRunner.run_benchmarks(graphs)
 
+    # Save results to JSON
+    print("\n" + "=" * 70)
+    print("Saving results to JSON...")
+    print("=" * 70)
+    json_output_path = output_dir / "benchmark_results.json"
+    save_results_to_json(results, json_output_path)
+
     # Generate plots
     print("\n" + "=" * 70)
     print("Generating plots...")
@@ -124,7 +168,8 @@ Examples:
     print(f"\nTotal graphs processed: {len(graphs)}")
     print(f"Total benchmark runs: {len(results)}")
     print(f"\nResults saved to: {output_dir}")
-    print("\nGenerated plots:")
+    print("\nGenerated files:")
+    print(f"  - {output_dir / 'benchmark_results.json'}")
     print(f"  - {output_dir / 'benchmark_execution_time_vs_nodes.png'}")
     print(f"  - {output_dir / 'benchmark_execution_time_vs_edges.png'}")
     print(f"  - {output_dir / 'benchmark_modularity_comparison.png'}")
