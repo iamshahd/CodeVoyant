@@ -75,6 +75,83 @@ class CommunityDetectionAlgorithm(ABC):
 
         return nx.community.modularity(self.graph, self.communities)
 
+    def get_density(self) -> float:
+        """
+        Calculate the average internal density of communities.
+
+        Density is the ratio of actual edges to possible edges within communities.
+        Higher values indicate tighter communities.
+
+        Returns:
+            Average density across all communities (0 to 1)
+        """
+        if self.communities is None:
+            self.detect_communities()
+
+        assert self.communities is not None
+
+        if not self.communities:
+            return 0.0
+
+        densities = []
+        for community in self.communities:
+            if len(community) <= 1:
+                densities.append(0.0)
+                continue
+
+            # Get subgraph for this community
+            subgraph = self.graph.subgraph(community)
+            density = nx.density(subgraph)
+            densities.append(density)
+
+        return sum(densities) / len(densities) if densities else 0.0
+
+    def get_conductance(self) -> float:
+        """
+        Calculate the average conductance of communities.
+
+        Conductance measures the fraction of edges leaving a community
+        relative to the total edges incident to the community.
+        Lower values indicate better community separation.
+
+        Returns:
+            Average conductance across all communities (0 to 1, lower is better)
+        """
+        if self.communities is None:
+            self.detect_communities()
+
+        assert self.communities is not None
+
+        if not self.communities:
+            return 1.0
+
+        conductances = []
+        for community in self.communities:
+            if not community:
+                continue
+
+            # Count edges within and leaving the community
+            internal_edges = 0
+            external_edges = 0
+
+            for node in community:
+                if node not in self.graph:
+                    continue
+                for neighbor in self.graph.neighbors(node):
+                    if neighbor in community:
+                        internal_edges += 1
+                    else:
+                        external_edges += 1
+
+            # Conductance = external / (internal + external)
+            total_edges = internal_edges + external_edges
+            if total_edges > 0:
+                conductances.append(external_edges / total_edges)
+            else:
+                conductances.append(0.0)
+
+        return sum(conductances) / len(conductances) if conductances else 1.0
+
     def get_community_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the detected communities.

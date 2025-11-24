@@ -1,6 +1,6 @@
 """Visualization tab rendering utilities."""
 
-import pandas as pd  # ignore [import-untyped]
+import pandas as pd  # type: ignore [import-untyped]
 import streamlit as st
 
 from .comparison import display_algorithm_comparison
@@ -122,15 +122,30 @@ def render_analysis_tab(enable_communities, communities, analyzer):
         # Detailed metrics table
         st.markdown("#### Detailed Metrics")
         metrics_df = pd.DataFrame(metrics)
+        # Format tags for display
+        if "tags" in metrics_df.columns:
+            metrics_df["tags"] = metrics_df["tags"].apply(
+                lambda x: ", ".join(x) if x else ""
+            )
         st.dataframe(metrics_df.sort_values("size", ascending=False), width="stretch")
 
         # Top communities
         st.markdown("#### Largest Communities")
         top_communities = sorted(metrics, key=lambda x: x["size"], reverse=True)[:5]
         for i, metric in enumerate(top_communities, 1):
+            # Create a title with tags if available
+            tags_display = ""
+            if "tags" in metric and metric["tags"]:
+                tags_display = f" - Tags: {', '.join(metric['tags'])}"
+
             with st.expander(
-                f"{i}. Community {metric['community_id']} ({metric['size']} nodes)"
+                f"{i}. Community {metric['community_id']} ({metric['size']} nodes){tags_display}"
             ):
+                # Display tags prominently
+                if "tags" in metric and metric["tags"]:
+                    st.markdown(f"**Tags:** {', '.join(metric['tags'])}")
+                    st.markdown("---")
+
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Internal Edges", metric["internal_edges"])
