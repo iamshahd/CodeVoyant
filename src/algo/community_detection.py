@@ -6,7 +6,7 @@ from networkx.algorithms import community
 from .base import CommunityDetectionAlgorithm
 
 
-class LouvainCommunityDetection(CommunityDetectionAlgorithm):
+class LouvainLibrary(CommunityDetectionAlgorithm):
     """
     Louvain community detection algorithm.
 

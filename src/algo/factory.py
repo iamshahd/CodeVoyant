@@ -2,18 +2,18 @@
 Factory and convenience functions for community detection algorithms.
 """
 
-from typing import List, Set, Optional, Dict, Any
+from typing import Any, Dict, List, Optional, Set
 
 import networkx as nx
 
 from .base import CommunityDetectionAlgorithm
 from .community_detection import (
-    LouvainCommunityDetection,
-    LabelPropagationCommunityDetection,
-    GreedyModularityCommunityDetection,
     GirvanNewmanCommunityDetection,
+    GreedyModularityCommunityDetection,
+    LabelPropagationCommunityDetection,
 )
 from .community_utils import CommunityAnalyzer, CommunityVisualizer
+from .louvain import LouvainCommunityDetection
 
 
 class CommunityDetectionFactory:
