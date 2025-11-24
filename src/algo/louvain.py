@@ -7,7 +7,7 @@ Reference:
     Journal of statistical mechanics: theory and experiment, 2008(10), P10008.
 """
 
-import random
+from random import Random
 from typing import Any, Dict, List, Optional, Set
 
 import networkx as nx
@@ -46,10 +46,8 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
         self.weight = weight
         self.resolution = resolution
         self.seed = seed
-        self.hieracrhy: Optional[List[Dict[str, int]]] = None
-
-        if seed is not None:
-            random.seed(seed)
+        self.hierarchy: Optional[List[List[Set[str]]]] = None
+        self._random = Random(seed)
 
     def _get_edge_weight(self, u: str, v: str) -> float:
         """Get the weight of an edge between two nodes."""
@@ -59,34 +57,9 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
             return 1.0
         return 0.0
 
-    def _compute_modularity(
-        self, partition: Dict[str, int], m: float, k: Dict[str, float]
-    ) -> float:
-        """
-        Compute modularity for a given partition.
-
-        Args:
-            partition: Dictionary mapping node to community ID
-            m: Total weight of all edges in the graph
-            k: Dictionary mapping node to its degree (sum of edge weights)
-
-        Returns:
-            Modularity value
-        """
-        q = 0.0
-        for u in self.graph.nodes():
-            for v in self.graph.nodes():
-                if partition[u] == partition[v]:
-                    a_uv = self._get_edge_weight(u, v)
-                    q += a_uv - self.resolution * (k[u] * k[v]) / (2 * m)
-
-        return q / (2 * m) if m > 0 else 0.0
-
     def _compute_modularity_gain(
         self,
-        node: str,
         community: int,
-        partition: Dict[str, int],
         k_i: float,
         sigma_tot: Dict[int, float],
         k_i_in: float,
@@ -96,9 +69,7 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
         Compute the modularity gain from moving a node to a community.
 
         Args:
-            node: Node to move
             community: Target community
-            partition: Current partition
             k_i: Degree of node
             sigma_tot: Total degree of each community
             k_i_in: Sum of weights of edges from node to nodes in community
@@ -108,8 +79,10 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
             Modularity gain
         """
         # Delta Q formula from the Louvain paper
-        delta_q = (k_i_in - sigma_tot[community] * k_i / (2 * m)) * self.resolution
-        return delta_q / m
+        return (
+            k_i_in / (2 * m)
+            - self.resolution * (sigma_tot[community] * k_i) / (2 * m) ** 2
+        )
 
     def _get_neighbors_communities(
         self, node: str, partition: Dict[str, int]
@@ -165,7 +138,7 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
         while True:
             improvement_this_pass = False
             nodes = list(self.graph.nodes())
-            random.shuffle(nodes)  # Random order for processing
+            self._random.shuffle(nodes)  # Random order for processing
 
             for node in nodes:
                 current_comm = partition[node]
@@ -189,7 +162,7 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
                     k_i_in = neighbor_communities.get(comm, 0.0)
 
                     gain = self._compute_modularity_gain(
-                        node, comm, partition, k_i, sigma_tot, k_i_in, m
+                        comm, k_i, sigma_tot, k_i_in, m
                     )
 
                     if gain > best_gain:
@@ -293,7 +266,8 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
         original_nodes = {i: {node} for i, node in enumerate(self.graph.nodes())}
 
         current_graph = self.graph.copy()
-        self.hierarchy = [partition.copy()]
+        # Store the initial partition as a list of node-sets (one set per community)
+        self.hierarchy = [list(original_nodes.values())]
 
         while True:
             # Temporarily use current_graph for phase 1
@@ -341,11 +315,11 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
                 new_original_nodes[new_comm].update(orig_nodes_set)
 
             original_nodes = new_original_nodes
-
             # Reset partition for new graph - each node (community) is in its own partition
             partition = {node: node for node in current_graph.nodes()}
 
-            self.hierarchy.append(partition.copy())
+            # Append the current partition as a list of node-sets (one set per community)
+            self.hierarchy.append(list(original_nodes.values()))
 
         # Restore original graph
         self.graph = original_graph
@@ -370,18 +344,7 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
         if not self.hierarchy:
             return []
 
-        # Build hierarchy of communities in terms of original nodes
-        hierarchy_result: List[List[Set[str]]] = []
-
-        # First level: each node in its own community
-        first_level = [{node} for node in self.graph.nodes()]
-        hierarchy_result.append(first_level)
-
-        # Add final level
-        if self.communities:
-            hierarchy_result.append(self.communities)
-
-        return hierarchy_result
+        return self.hierarchy
 
     def get_partition_at_level(self, level: int = -1) -> List[Set[str]]:
         """
@@ -394,4 +357,9 @@ class LouvainCommunityDetection(CommunityDetectionAlgorithm):
             List of communities at the specified level
         """
         hierarchy = self.detect_communities_hierarchical()
-        return hierarchy[level] if hierarchy else []
+        # reverse level indexing to match hierarchy order
+        # 0 is finest, -1 is coarsest
+        if level < 0:
+            return hierarchy[len(hierarchy) + level]
+
+        return hierarchy[len(hierarchy) - 1 - level]
