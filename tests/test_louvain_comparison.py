@@ -308,6 +308,150 @@ class TestLouvainModularity:
         # Modularities should be close (within reasonable tolerance)
         assert abs(hand_modularity - lib_modularity) < 0.15
 
+    def test_modularity_same_seed_same_result(self):
+        """Test that same seed produces identical modularity."""
+        G = nx.karate_club_graph()
+        seed = 42
+
+        # Run hand implementation twice
+        hand_impl1 = LouvainCommunityDetection(G, seed=seed)
+        hand_impl2 = LouvainCommunityDetection(G, seed=seed)
+
+        hand_communities1 = hand_impl1.detect_communities()
+        hand_communities2 = hand_impl2.detect_communities()
+
+        hand_mod1 = nx.community.modularity(G, hand_communities1)
+        hand_mod2 = nx.community.modularity(G, hand_communities2)
+
+        # Same seed should give identical modularity
+        assert abs(hand_mod1 - hand_mod2) < 1e-10
+
+        # Run library twice
+        lib_impl1 = LouvainLibrary(G, seed=seed)
+        lib_impl2 = LouvainLibrary(G, seed=seed)
+
+        lib_communities1 = lib_impl1.detect_communities()
+        lib_communities2 = lib_impl2.detect_communities()
+
+        lib_mod1 = nx.community.modularity(G, lib_communities1)
+        lib_mod2 = nx.community.modularity(G, lib_communities2)
+
+        # Same seed should give identical modularity
+        assert abs(lib_mod1 - lib_mod2) < 1e-10
+
+    def test_modularity_internal_vs_networkx(self):
+        """Test that internal modularity calculation matches NetworkX."""
+        G = nx.karate_club_graph()
+        seed = 42
+
+        hand_impl = LouvainCommunityDetection(G, seed=seed)
+        library = LouvainLibrary(G, seed=seed)
+
+        hand_communities = hand_impl.detect_communities()
+        lib_communities = library.detect_communities()
+
+        # Get internal modularity if available
+        if hasattr(hand_impl, "modularity") and hand_impl.modularity is not None:
+            internal_hand_mod = hand_impl.modularity
+            networkx_hand_mod = nx.community.modularity(G, hand_communities)
+            # Internal calculation should match NetworkX
+            assert abs(internal_hand_mod - networkx_hand_mod) < 1e-6
+
+        if hasattr(library, "modularity") and library.modularity is not None:
+            internal_lib_mod = library.modularity
+            networkx_lib_mod = nx.community.modularity(G, lib_communities)
+            # Internal calculation should match NetworkX
+            assert abs(internal_lib_mod - networkx_lib_mod) < 1e-6
+
+    def test_modularity_with_weights(self):
+        """Test modularity calculation with weighted graphs."""
+        G = nx.Graph()
+        # Strong community 1
+        G.add_edge(0, 1, weight=10.0)
+        G.add_edge(0, 2, weight=10.0)
+        G.add_edge(1, 2, weight=10.0)
+
+        # Strong community 2
+        G.add_edge(3, 4, weight=10.0)
+        G.add_edge(3, 5, weight=10.0)
+        G.add_edge(4, 5, weight=10.0)
+
+        # Weak bridge
+        G.add_edge(2, 3, weight=0.5)
+
+        seed = 42
+
+        hand_impl = LouvainCommunityDetection(G, weight="weight", seed=seed)
+        library = LouvainLibrary(G, weight="weight", seed=seed)
+
+        hand_communities = hand_impl.detect_communities()
+        lib_communities = library.detect_communities()
+
+        # Calculate weighted modularity
+        hand_modularity = nx.community.modularity(G, hand_communities, weight="weight")
+        lib_modularity = nx.community.modularity(G, lib_communities, weight="weight")
+
+        # Both should have high modularity due to strong communities
+        assert hand_modularity > 0.4
+        assert lib_modularity > 0.4
+
+        # Should be close
+        assert abs(hand_modularity - lib_modularity) < 0.15
+
+    def test_modularity_with_resolution(self):
+        """Test modularity with different resolution parameters."""
+        G = nx.karate_club_graph()
+        seed = 42
+
+        resolutions = [0.5, 1.0, 1.5, 2.0]
+
+        for res in resolutions:
+            hand_impl = LouvainCommunityDetection(G, resolution=res, seed=seed)
+            library = LouvainLibrary(G, resolution=res, seed=seed)
+
+            hand_communities = hand_impl.detect_communities()
+            lib_communities = library.detect_communities()
+
+            hand_modularity = nx.community.modularity(
+                G, hand_communities, resolution=res
+            )
+            lib_modularity = nx.community.modularity(G, lib_communities, resolution=res)
+
+            # Both should produce valid modularity
+            assert -1 <= hand_modularity <= 1
+            assert -1 <= lib_modularity <= 1
+
+            # Should be reasonably close (higher tolerance for different resolutions)
+            assert abs(hand_modularity - lib_modularity) < 0.25
+
+    def test_modularity_improves_over_iterations(self):
+        """Test that modularity improves or stays same across hierarchical levels."""
+        G = nx.karate_club_graph()
+        seed = 42
+
+        hand_impl = LouvainCommunityDetection(G, seed=seed)
+        library = LouvainLibrary(G, seed=seed)
+
+        hand_hierarchy = hand_impl.detect_communities_hierarchical()
+        lib_hierarchy = library.detect_communities_hierarchical()
+
+        # Calculate modularity at each level
+        if len(hand_hierarchy) > 1:
+            hand_modularities = [
+                nx.community.modularity(G, level) for level in hand_hierarchy
+            ]
+            # Modularity should generally improve (or at least not decrease significantly)
+            for i in range(len(hand_modularities) - 1):
+                # Allow small decreases due to numerical precision and algorithm variations
+                assert hand_modularities[i + 1] >= hand_modularities[i] - 0.035
+
+        if len(lib_hierarchy) > 1:
+            lib_modularities = [
+                nx.community.modularity(G, level) for level in lib_hierarchy
+            ]
+            for i in range(len(lib_modularities) - 1):
+                assert lib_modularities[i + 1] >= lib_modularities[i] - 0.02
+
     def test_modularity_comparison_multiple_graphs(self):
         """Test modularity on multiple graph types."""
         graphs = [
@@ -334,6 +478,45 @@ class TestLouvainModularity:
 
             # Should be relatively close
             assert abs(hand_modularity - lib_modularity) < 0.2
+
+    def test_modularity_extreme_cases(self):
+        """Test modularity calculation on edge cases."""
+        # Complete graph - should have low modularity for multiple communities
+        G_complete = nx.complete_graph(10)
+        seed = 42
+
+        hand_complete = LouvainCommunityDetection(G_complete, seed=seed)
+        lib_complete = LouvainLibrary(G_complete, seed=seed)
+
+        hand_comm = hand_complete.detect_communities()
+        lib_comm = lib_complete.detect_communities()
+
+        hand_mod = nx.community.modularity(G_complete, hand_comm)
+        lib_mod = nx.community.modularity(G_complete, lib_comm)
+
+        # If split into multiple communities, modularity should be low or negative
+        if len(hand_comm) > 1:
+            assert hand_mod < 0.1
+        if len(lib_comm) > 1:
+            assert lib_mod < 0.1
+
+        # Disconnected components - should have high modularity
+        G_disconnected = nx.Graph()
+        G_disconnected.add_edges_from([(0, 1), (1, 2)])
+        G_disconnected.add_edges_from([(3, 4), (4, 5)])
+
+        hand_disc = LouvainCommunityDetection(G_disconnected, seed=seed)
+        lib_disc = LouvainLibrary(G_disconnected, seed=seed)
+
+        hand_comm_disc = hand_disc.detect_communities()
+        lib_comm_disc = lib_disc.detect_communities()
+
+        hand_mod_disc = nx.community.modularity(G_disconnected, hand_comm_disc)
+        lib_mod_disc = nx.community.modularity(G_disconnected, lib_comm_disc)
+
+        # Should have high modularity for disconnected components
+        assert hand_mod_disc > 0.3
+        assert lib_mod_disc > 0.3
 
 
 class TestLouvainHierarchical:
