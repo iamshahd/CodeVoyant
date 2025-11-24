@@ -8,7 +8,7 @@ from .base import CommunityDetectionAlgorithm
 
 class LouvainLibrary(CommunityDetectionAlgorithm):
     """
-    Louvain community detection algorithm.
+    Louvain community detection algorithm (NetworkX implementation).
 
     The Louvain method is a greedy optimization method that attempts to optimize
     the "modularity" of a partition of the network. It's one of the fastest and
