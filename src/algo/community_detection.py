@@ -201,7 +201,7 @@ class GreedyModularityCommunityDetection(CommunityDetectionAlgorithm):
         return self.communities
 
 
-class GirvanNewmanCommunityDetection(CommunityDetectionAlgorithm):
+class GirvanNewmanLibrary(CommunityDetectionAlgorithm):
     """
     Girvan-Newman community detection algorithm.
 

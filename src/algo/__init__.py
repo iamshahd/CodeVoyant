@@ -42,7 +42,7 @@ Advanced usage:
 
 from .base import CommunityDetectionAlgorithm
 from .community_detection import (
-    GirvanNewmanCommunityDetection,
+    GirvanNewmanLibrary,
     GreedyModularityCommunityDetection,
     LabelPropagationCommunityDetection,
     LouvainLibrary,
@@ -55,6 +55,7 @@ from .factory import (
     detect_communities,
     visualize_communities,
 )
+from .girvan_newman import GirvanNewmanCommunityDetection
 from .louvain import LouvainCommunityDetection
 
 __all__ = [
@@ -66,6 +67,7 @@ __all__ = [
     "LabelPropagationCommunityDetection",
     "GreedyModularityCommunityDetection",
     "GirvanNewmanCommunityDetection",
+    "GirvanNewmanLibrary",
     # Utilities
     "CommunityAnalyzer",
     "CommunityVisualizer",
