@@ -8,11 +8,11 @@ import networkx as nx
 
 from .base import CommunityDetectionAlgorithm
 from .community_detection import (
-    GirvanNewmanCommunityDetection,
     GreedyModularityCommunityDetection,
     LabelPropagationCommunityDetection,
 )
 from .community_utils import CommunityAnalyzer, CommunityVisualizer
+from .girvan_newman import GirvanNewmanCommunityDetection
 from .louvain import LouvainCommunityDetection
 
 
