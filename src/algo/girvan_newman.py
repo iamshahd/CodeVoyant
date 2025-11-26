@@ -6,7 +6,7 @@ References:
 """
 
 from collections import deque
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import networkx as nx  # type: ignore[import-untyped]
 
@@ -26,13 +26,14 @@ class GirvanNewmanCommunityDetection(CommunityDetectionAlgorithm):
     2. Remove edge(s) with highest betweenness
     3. Recalculate betweenness for all edges
     4. Repeat until stopping criterion is met (target communities or modularity peak)
+
+    Note: This algorithm is slow for large networks (O(m^2 n) complexity).
     """
 
     def __init__(
         self,
         graph: nx.Graph,
-        num_communities: Optional[int] = None,
-        use_modularity: bool = True,
+        most_valuable_edge: Optional[Callable] = None,
         **kwargs: Any,
     ):
         """
@@ -40,17 +41,11 @@ class GirvanNewmanCommunityDetection(CommunityDetectionAlgorithm):
 
         Args:
             graph: NetworkX graph
-            num_communities: Target number of communities. If specified, this takes
-                           precedence over use_modularity and the algorithm stops
-                           when this number is reached.
-            use_modularity: If True and num_communities is None, automatically determine
-                          optimal number of communities by maximizing modularity.
-                          Ignored if num_communities is specified.
+            most_valuable_edge: Function to determine edge importance (default: edge betweenness)
             **kwargs: Additional parameters passed to base class
         """
         super().__init__(graph, **kwargs)
-        self.num_communities = num_communities
-        self.use_modularity = use_modularity
+        self.most_valuable_edge = most_valuable_edge
         self.modularity_history: List[float] = []
         self.dendrogram: List[List[Set[str]]] = []
         # Store original graph for modularity calculations
@@ -213,9 +208,14 @@ class GirvanNewmanCommunityDetection(CommunityDetectionAlgorithm):
 
         return q / (2.0 * m)
 
-    def detect_communities(self) -> List[Set[str]]:
+    def detect_communities(
+        self, num_communities: Optional[int] = None
+    ) -> List[Set[str]]:
         """
         Detect communities using the Girvan-Newman algorithm.
+
+        Args:
+            num_communities: Target number of communities (if None, uses optimal modularity)
 
         Returns:
             List of sets, where each set contains node IDs belonging to a community
@@ -224,6 +224,9 @@ class GirvanNewmanCommunityDetection(CommunityDetectionAlgorithm):
         self.modularity_history = []
         self.dendrogram = []
 
+        # Reset node_to_community mapping (will be rebuilt by base class if needed)
+        self.node_to_community = None
+
         # Start with the full graph as a working copy
         working_graph = self.original_graph.copy()
 
@@ -231,120 +234,185 @@ class GirvanNewmanCommunityDetection(CommunityDetectionAlgorithm):
         if working_graph.number_of_edges() == 0:
             self.communities = [set([node]) for node in working_graph.nodes()]
             self.dendrogram.append(self.communities)
-            self.node_to_community = self._build_node_to_community_mapping()
             return self.communities
 
         # Get initial connected components
         initial_communities = self._get_connected_components(working_graph)
 
-        # Track the best partition if using modularity
-        best_modularity = -1.0
-        best_communities = initial_communities
-
         # Store initial state in dendrogram
         self.dendrogram.append(initial_communities)
 
-        # Keep removing edges until we reach desired communities or run out of edges
-        while working_graph.number_of_edges() > 0:
-            # Calculate edge betweenness on the current working graph
-            betweenness = self._calculate_edge_betweenness(working_graph)
+        if num_communities is not None:
+            # Get partition with specified number of communities
+            current_num_communities = len(initial_communities)
 
-            if not betweenness:
-                break
+            while (
+                working_graph.number_of_edges() > 0
+                and current_num_communities < num_communities
+            ):
+                # Calculate edge betweenness on the current working graph
+                if self.most_valuable_edge is not None:
+                    # Use custom edge selection function
+                    edge_to_remove = self.most_valuable_edge(working_graph)
+                    if edge_to_remove and working_graph.has_edge(*edge_to_remove):
+                        working_graph.remove_edge(*edge_to_remove)
+                else:
+                    # Use default betweenness calculation
+                    betweenness = self._calculate_edge_betweenness(working_graph)
 
-            # Find edge(s) with maximum betweenness
-            max_betweenness = max(betweenness.values())
-            edges_to_remove = [
-                edge
-                for edge, score in betweenness.items()
-                if abs(score - max_betweenness) < 1e-9
-            ]
+                    if not betweenness:
+                        break
 
-            # Remove edge(s) with highest betweenness
-            for edge in edges_to_remove:
-                if working_graph.has_edge(*edge):
-                    working_graph.remove_edge(*edge)
+                    # Find edge(s) with maximum betweenness
+                    max_betweenness = max(betweenness.values())
+                    edges_to_remove = [
+                        edge
+                        for edge, score in betweenness.items()
+                        if abs(score - max_betweenness) < 1e-9
+                    ]
 
-            # Get current communities (connected components) from the working graph
-            current_communities = self._get_connected_components(working_graph)
-            self.dendrogram.append(current_communities)
+                    # Remove edge(s) with highest betweenness
+                    for edge in edges_to_remove:
+                        if working_graph.has_edge(*edge):
+                            working_graph.remove_edge(*edge)
 
-            # Calculate modularity on the ORIGINAL graph with the current partition
-            modularity = self._calculate_modularity(
-                current_communities, self.original_graph
-            )
-            self.modularity_history.append(modularity)
+                # Get current communities (connected components)
+                current_communities = self._get_connected_components(working_graph)
+                self.dendrogram.append(current_communities)
+                current_num_communities = len(current_communities)
 
-            # Track best partition
-            if modularity > best_modularity:
-                best_modularity = modularity
-                best_communities = current_communities
-
-            # Check stopping criteria
-            if self.num_communities is not None:
-                # Stop when we reach or exceed the target number of communities
-                if len(current_communities) >= self.num_communities:
-                    # If we have exactly the right number, use current
-                    # If we overshot, we already stored it in the dendrogram
-                    if len(current_communities) == self.num_communities:
-                        self.communities = current_communities
-                    else:
-                        # We overshot - use the previous partition from dendrogram
-                        # which had fewer communities
-                        for prev_partition in reversed(self.dendrogram[:-1]):
-                            if len(prev_partition) <= self.num_communities:
-                                self.communities = prev_partition
-                                break
-                        else:
-                            # Fallback to current if we can't find a better one
-                            self.communities = current_communities
-                    self.node_to_community = self._build_node_to_community_mapping()
-                    return self.communities
-
-        # Use best partition by modularity or final partition
-        if self.use_modularity:
-            self.communities = best_communities
-        else:
             self.communities = self._get_connected_components(working_graph)
+        else:
+            # Find partition with best modularity
+            best_modularity = float("-inf")
+            best_partition = initial_communities
 
-        self.node_to_community = self._build_node_to_community_mapping()
+            # Calculate initial modularity
+            initial_mod = self._calculate_modularity(
+                initial_communities, self.original_graph
+            )
+            self.modularity_history.append(initial_mod)
+            if initial_mod > best_modularity:
+                best_modularity = initial_mod
+                best_partition = initial_communities
+
+            # Keep removing edges and track modularity
+            iterations_since_improvement = 0
+
+            while working_graph.number_of_edges() > 0:
+                # Calculate edge betweenness on the current working graph
+                if self.most_valuable_edge is not None:
+                    # Use custom edge selection function
+                    edge_to_remove = self.most_valuable_edge(working_graph)
+                    if edge_to_remove and working_graph.has_edge(*edge_to_remove):
+                        working_graph.remove_edge(*edge_to_remove)
+                else:
+                    # Use default betweenness calculation
+                    betweenness = self._calculate_edge_betweenness(working_graph)
+
+                    if not betweenness:
+                        break
+
+                    # Find edge(s) with maximum betweenness
+                    max_betweenness = max(betweenness.values())
+                    edges_to_remove = [
+                        edge
+                        for edge, score in betweenness.items()
+                        if abs(score - max_betweenness) < 1e-9
+                    ]
+
+                    # Remove edge(s) with highest betweenness
+                    for edge in edges_to_remove:
+                        if working_graph.has_edge(*edge):
+                            working_graph.remove_edge(*edge)
+
+                # Get current communities (connected components)
+                current_communities = self._get_connected_components(working_graph)
+                self.dendrogram.append(current_communities)
+
+                # Calculate modularity on the ORIGINAL graph with current partition
+                mod = self._calculate_modularity(
+                    current_communities, self.original_graph
+                )
+                self.modularity_history.append(mod)
+
+                if mod > best_modularity:
+                    best_modularity = mod
+                    best_partition = current_communities
+                    iterations_since_improvement = 0
+                else:
+                    iterations_since_improvement += 1
+                    # Stop if modularity has been decreasing consistently
+                    # Use a dynamic threshold based on graph size
+                    max_patience = max(10, working_graph.number_of_nodes() // 3)
+                    if iterations_since_improvement >= max_patience:
+                        break
+
+            self.communities = best_partition
+
         return self.communities
 
-    def _build_node_to_community_mapping(self) -> Dict[str, int]:
+    def get_dendrogram(self, max_levels: int = 10) -> List[List[Set[str]]]:
         """
-        Build mapping from node to community ID.
+        Get the hierarchical dendrogram of community splits.
+
+        Args:
+            max_levels: Maximum number of hierarchy levels to compute
 
         Returns:
-            Dictionary mapping node IDs to community indices
+            List of partitions at each level of the hierarchy
         """
-        if self.communities is None:
-            return {}
+        # If dendrogram already computed from detect_communities, return it
+        if self.dendrogram:
+            return self.dendrogram[:max_levels]
 
-        mapping = {}
-        for comm_id, community in enumerate(self.communities):
-            for node in community:
-                mapping[node] = comm_id
-        return mapping
+        # Otherwise, compute it fresh
+        dendrogram = []
+        working_graph = self.original_graph.copy()
 
-    def get_node_to_community_mapping(self) -> Dict[str, int]:
-        """
-        Get a mapping from node ID to community ID.
+        # Handle graphs with no edges
+        if working_graph.number_of_edges() == 0:
+            return [[set([node]) for node in working_graph.nodes()]]
 
-        Returns:
-            Dictionary mapping node IDs to their community IDs (empty if detection hasn't run)
-        """
-        if self.node_to_community is None:
-            return {}
-        return self.node_to_community
+        # Store initial state
+        initial_communities = self._get_connected_components(working_graph)
+        dendrogram.append(initial_communities)
 
-    def get_dendrogram(self) -> List[List[Set[str]]]:
-        """
-        Get the dendrogram (hierarchy) of community splits.
+        # Keep removing edges up to max_levels
+        level = 1
+        while working_graph.number_of_edges() > 0 and level < max_levels:
+            # Calculate edge betweenness on the current working graph
+            if self.most_valuable_edge is not None:
+                # Use custom edge selection function
+                edge_to_remove = self.most_valuable_edge(working_graph)
+                if edge_to_remove and working_graph.has_edge(*edge_to_remove):
+                    working_graph.remove_edge(*edge_to_remove)
+            else:
+                # Use default betweenness calculation
+                betweenness = self._calculate_edge_betweenness(working_graph)
 
-        Returns:
-            List where each element is a list of communities at that step
-        """
-        return self.dendrogram
+                if not betweenness:
+                    break
+
+                # Find edge(s) with maximum betweenness
+                max_betweenness = max(betweenness.values())
+                edges_to_remove = [
+                    edge
+                    for edge, score in betweenness.items()
+                    if abs(score - max_betweenness) < 1e-9
+                ]
+
+                # Remove edge(s) with highest betweenness
+                for edge in edges_to_remove:
+                    if working_graph.has_edge(*edge):
+                        working_graph.remove_edge(*edge)
+
+            # Get current communities (connected components)
+            current_communities = self._get_connected_components(working_graph)
+            dendrogram.append(current_communities)
+            level += 1
+
+        return dendrogram
 
     def get_modularity_history(self) -> List[float]:
         """

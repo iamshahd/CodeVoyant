@@ -65,22 +65,32 @@ class TestGirvanNewmanBasics:
         """Test default initialization."""
         detector = GirvanNewmanCommunityDetection(simple_graph)
         assert detector.graph is not None
-        assert detector.num_communities is None
-        assert detector.use_modularity is True
+        assert detector.most_valuable_edge is None
         assert detector.communities is None
         assert detector.modularity_history == []
         assert detector.dendrogram == []
 
-    def test_initialization_with_num_communities(self, simple_graph):
-        """Test initialization with target number of communities."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=3)
-        assert detector.num_communities == 3
-        assert detector.use_modularity is True
+    def test_initialization_with_most_valuable_edge(self, simple_graph):
+        """Test initialization with custom edge selection function."""
 
-    def test_initialization_without_modularity(self, simple_graph):
-        """Test initialization with modularity disabled."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, use_modularity=False)
-        assert detector.use_modularity is False
+        def custom_edge_fn(g):
+            return max(g.edges(), key=lambda e: g.degree(e[0]) + g.degree(e[1]))
+
+        detector = GirvanNewmanCommunityDetection(
+            simple_graph, most_valuable_edge=custom_edge_fn
+        )
+        assert detector.most_valuable_edge == custom_edge_fn
+
+    def test_initialization_stores_original_graph(self, simple_graph):
+        """Test initialization stores a copy of the original graph."""
+        detector = GirvanNewmanCommunityDetection(simple_graph)
+        assert detector.original_graph is not None
+        assert (
+            detector.original_graph.number_of_nodes() == simple_graph.number_of_nodes()
+        )
+        assert (
+            detector.original_graph.number_of_edges() == simple_graph.number_of_edges()
+        )
 
     def test_directed_graph_conversion(self):
         """Test that directed graphs are converted to undirected."""
@@ -243,8 +253,8 @@ class TestCommunityDetection:
 
     def test_detect_with_target_communities(self, simple_graph):
         """Test detection with target number of communities."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
-        communities = detector.detect_communities()
+        detector = GirvanNewmanCommunityDetection(simple_graph)
+        communities = detector.detect_communities(num_communities=2)
 
         assert len(communities) == 2
         # All nodes should be assigned
@@ -268,7 +278,7 @@ class TestCommunityDetection:
 
     def test_detect_karate_club(self, karate_graph):
         """Test on Karate Club graph."""
-        detector = GirvanNewmanCommunityDetection(karate_graph, use_modularity=True)
+        detector = GirvanNewmanCommunityDetection(karate_graph)
         communities = detector.detect_communities()
 
         # Should find reasonable number of communities
@@ -297,18 +307,20 @@ class TestCommunityDetection:
 
     def test_state_after_detection(self, simple_graph):
         """Test that detector state is properly set after detection."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
-        communities = detector.detect_communities()
+        detector = GirvanNewmanCommunityDetection(simple_graph)
+        communities = detector.detect_communities(num_communities=2)
 
         # Check that communities are stored
         assert detector.communities == communities
-        # Check node to community mapping exists
-        assert detector.node_to_community is not None
+        # Check node to community mapping can be retrieved
+        mapping = detector.get_node_to_community_mapping()
+        assert mapping is not None
+        assert len(mapping) == simple_graph.number_of_nodes()
         assert len(detector.node_to_community) == simple_graph.number_of_nodes()
 
     def test_multiple_detections(self, simple_graph):
         """Test running detection multiple times."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(simple_graph)
 
         communities1 = detector.detect_communities()
         communities2 = detector.detect_communities()
@@ -322,7 +334,7 @@ class TestNodeToCommunityMapping:
 
     def test_mapping_after_detection(self, simple_graph):
         """Test that mapping is created after detection."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(simple_graph)
         detector.detect_communities()
 
         mapping = detector.get_node_to_community_mapping()
@@ -331,7 +343,7 @@ class TestNodeToCommunityMapping:
 
     def test_mapping_consistency(self, simple_graph):
         """Test that mapping is consistent with communities."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(simple_graph)
         communities = detector.detect_communities()
         mapping = detector.get_node_to_community_mapping()
 
@@ -343,8 +355,10 @@ class TestNodeToCommunityMapping:
     def test_mapping_before_detection(self, simple_graph):
         """Test mapping before detection is run."""
         detector = GirvanNewmanCommunityDetection(simple_graph)
+        # Base class will auto-detect if not already done
         mapping = detector.get_node_to_community_mapping()
-        assert mapping == {}
+        # Should now have a mapping after auto-detection
+        assert len(mapping) == simple_graph.number_of_nodes()
 
 
 class TestDendrogram:
@@ -352,7 +366,7 @@ class TestDendrogram:
 
     def test_dendrogram_structure(self, simple_graph):
         """Test dendrogram structure."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(simple_graph)
         detector.detect_communities()
         dendrogram = detector.get_dendrogram()
 
@@ -364,7 +378,7 @@ class TestDendrogram:
 
     def test_dendrogram_progression(self, simple_graph):
         """Test that dendrogram shows progression of splits."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=3)
+        detector = GirvanNewmanCommunityDetection(simple_graph)
         detector.detect_communities()
         dendrogram = detector.get_dendrogram()
 
@@ -376,7 +390,7 @@ class TestDendrogram:
 
     def test_dendrogram_node_coverage(self, simple_graph):
         """Test that all nodes are covered at each dendrogram level."""
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(simple_graph)
         detector.detect_communities()
         dendrogram = detector.get_dendrogram()
 
@@ -425,10 +439,10 @@ class TestAlgorithmProperties:
 
     def test_deterministic(self, simple_graph):
         """Test that algorithm is deterministic."""
-        detector1 = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
+        detector1 = GirvanNewmanCommunityDetection(simple_graph)
         communities1 = detector1.detect_communities()
 
-        detector2 = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
+        detector2 = GirvanNewmanCommunityDetection(simple_graph)
         communities2 = detector2.detect_communities()
 
         # Should get identical results
@@ -440,7 +454,7 @@ class TestAlgorithmProperties:
 
     def test_no_overlapping_communities(self, karate_graph):
         """Test that communities don't overlap."""
-        detector = GirvanNewmanCommunityDetection(karate_graph, num_communities=3)
+        detector = GirvanNewmanCommunityDetection(karate_graph)
         communities = detector.detect_communities()
 
         # Check no overlaps
@@ -459,7 +473,7 @@ class TestAlgorithmProperties:
 
     def test_progressive_splitting(self, barbell_graph):
         """Test that communities split progressively (not merged)."""
-        detector = GirvanNewmanCommunityDetection(barbell_graph, num_communities=3)
+        detector = GirvanNewmanCommunityDetection(barbell_graph)
         detector.detect_communities()
         dendrogram = detector.get_dendrogram()
 
@@ -478,8 +492,8 @@ class TestIntegrationWithNetworkX:
         G.add_edges_from([(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3)])
         nx.set_node_attributes(G, {i: f"node_{i}" for i in G.nodes()}, "label")
 
-        detector = GirvanNewmanCommunityDetection(G, num_communities=2)
-        communities = detector.detect_communities()
+        detector = GirvanNewmanCommunityDetection(G)
+        communities = detector.detect_communities(num_communities=2)
 
         assert len(communities) == 2
 
@@ -498,7 +512,7 @@ class TestIntegrationWithNetworkX:
             ]
         )
 
-        detector = GirvanNewmanCommunityDetection(G, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(G)
         communities = detector.detect_communities()
 
         # Should split at the weak bridge
@@ -519,7 +533,7 @@ class TestIntegrationWithNetworkX:
             ]
         )
 
-        detector = GirvanNewmanCommunityDetection(G, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(G)
         communities = detector.detect_communities()
 
         assert len(communities) == 2
@@ -531,7 +545,7 @@ class TestIntegrationWithNetworkX:
         original_edges = set(simple_graph.edges())
         original_nodes = set(simple_graph.nodes())
 
-        detector = GirvanNewmanCommunityDetection(simple_graph, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(simple_graph)
         detector.detect_communities()
 
         # Original graph should be unchanged
@@ -552,7 +566,7 @@ class TestComparisonWithExpectedResults:
         # Bridge
         G.add_edge(3, 4)
 
-        detector = GirvanNewmanCommunityDetection(G, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(G)
         communities = detector.detect_communities()
 
         assert len(communities) == 2
@@ -564,7 +578,7 @@ class TestComparisonWithExpectedResults:
         """Test splitting a path graph."""
         G = nx.path_graph(6)  # 0-1-2-3-4-5
 
-        detector = GirvanNewmanCommunityDetection(G, num_communities=2)
+        detector = GirvanNewmanCommunityDetection(G)
         communities = detector.detect_communities()
 
         assert len(communities) == 2
@@ -576,7 +590,7 @@ class TestComparisonWithExpectedResults:
         """Test on ring of cliques."""
         G = nx.ring_of_cliques(4, 3)  # 4 cliques of size 3
 
-        detector = GirvanNewmanCommunityDetection(G, num_communities=4)
+        detector = GirvanNewmanCommunityDetection(G)
         communities = detector.detect_communities()
 
         # Should identify close to 4 communities
