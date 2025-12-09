@@ -10,6 +10,7 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import networkx as nx  # type: ignore[import-untyped]
 import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import (  # type: ignore[import-untyped]
     adjusted_rand_score,
     normalized_mutual_info_score,
@@ -317,98 +318,114 @@ class CommunityAnalyzer:
 
     def get_community_tags(self, comm_id: int, top_n: int = 5) -> List[str]:
         """
-        Generate intelligent tags for a community using semantic analysis.
+        Generate intelligent tags for a community using TF-IDF analysis.
 
-        Uses a weighted scoring system that prioritizes:
-        1. Domain-specific terms (highest weight)
-        2. Module/package names (medium weight)
-        3. Function patterns (lower weight)
+        Uses scikit-learn's TfidfVectorizer to identify terms that are:
+        1. Frequent in this community (high TF)
+        2. Rare across other communities (high IDF)
 
-        Also considers token frequency and specificity.
+        This makes tags more distinctive and meaningful by prioritizing terms
+        that characterize this specific community rather than the entire codebase.
+
+        Additionally applies:
+        - Category-based weights (domain > modules > functions)
+        - Length bonuses for more specific terms
+        - Root similarity filtering for diversity
 
         Args:
             comm_id: Community ID
             top_n: Number of top tags to return
 
         Returns:
-            List of top N most relevant tags, ordered by importance
+            List of top N most relevant tags, ordered by TF-IDF score
         """
-        aggregated = self._aggregate_community_tokens(comm_id)
-        community_size = len(self.communities[comm_id])
-
-        # Calculate scores for each token with category-based weights
-        token_scores: Dict[str, float] = {}
-
-        # Weight factors for different categories
-        weights = {
-            "domain": 4.0,  # Domain terms are most valuable
-            "modules": 2.5,  # Module names show architectural grouping
-            "functions": 1.0,  # Function names are least unique
+        # Collect all tokens from all communities for TF-IDF
+        all_documents: List[str] = []
+        category_weights = {
+            "domain": 4.0,
+            "modules": 2.5,
+            "functions": 1.0,
         }
 
-        for category, counter in aggregated.items():
-            weight = weights[category]
+        # Build documents (one per community) with weighted tokens
+        for cid in range(len(self.communities)):
+            community_tokens = self._aggregate_community_tokens(cid)
+            # Create a document string with tokens weighted by category
+            doc_tokens = []
+            for category, counter in community_tokens.items():
+                weight = int(category_weights[category])
+                for token, count in counter.items():
+                    # Repeat tokens based on count and category weight
+                    doc_tokens.extend([token] * count * weight)
+            all_documents.append(" ".join(doc_tokens))
 
-            for token, count in counter.items():
-                # Calculate frequency ratio (how common in this community)
-                frequency_ratio = count / community_size
+        # Apply TF-IDF vectorization
+        vectorizer = TfidfVectorizer(
+            max_features=None,
+            lowercase=False,  # Tokens already processed
+            token_pattern=r"\S+",  # Split on whitespace only
+        )
 
-                # More nuanced specificity scoring
-                specificity_score = 1.0
-                if frequency_ratio > 0.9:
-                    specificity_score = 0.3  # Way too common, probably generic
-                elif frequency_ratio > 0.7:
-                    specificity_score = 0.6  # Too common
-                elif frequency_ratio < 0.05:
-                    specificity_score = 0.5  # Too rare, might be noise
-                elif 0.2 <= frequency_ratio <= 0.6:
-                    specificity_score = (
-                        1.5  # Sweet spot: common enough to be significant
-                    )
-                else:
-                    specificity_score = 1.0  # Decent
+        try:
+            tfidf_matrix = vectorizer.fit_transform(all_documents)
+            feature_names = vectorizer.get_feature_names_out()
 
-                # Bonus for longer tokens (more specific/meaningful)
-                length_bonus = 1.0
-                if len(token) >= 8:
-                    length_bonus = 1.8  # Long tokens are usually very specific
-                elif len(token) >= 6:
-                    length_bonus = 1.4
-                elif len(token) >= 4:
+            # Get TF-IDF scores for the target community
+            target_scores = tfidf_matrix[comm_id].toarray().flatten()
+
+            # Create token-score pairs
+            token_scores: Dict[str, float] = {}
+            for idx, token in enumerate(feature_names):
+                score = target_scores[idx]
+
+                if score > 0:  # Only consider non-zero scores
+                    # Apply length bonus for more specific terms
                     length_bonus = 1.0
-                else:
-                    length_bonus = 0.7  # Short tokens are often generic
+                    if len(token) >= 8:
+                        length_bonus = 1.8
+                    elif len(token) >= 6:
+                        length_bonus = 1.4
+                    elif len(token) >= 4:
+                        length_bonus = 1.0
+                    else:
+                        length_bonus = 0.7
 
-                # Combined score
-                score = count * weight * specificity_score * length_bonus
+                    token_scores[token] = score * length_bonus
 
-                # Accumulate score if token appears in multiple categories
-                token_scores[token] = token_scores.get(token, 0.0) + score
+            # Sort by score (descending)
+            sorted_tokens = sorted(
+                token_scores.items(), key=lambda x: x[1], reverse=True
+            )
 
-        # Sort by score and return top N
-        sorted_tokens = sorted(token_scores.items(), key=lambda x: x[1], reverse=True)
+            # Select top tags with diversity (avoid similar root words)
+            tags: List[str] = []
+            seen_roots: Set[str] = set()
 
-        # Return tokens, avoiding duplicates and ensuring diversity
-        tags: List[str] = []
-        seen_roots: Set[str] = set()
+            for token, score in sorted_tokens:
+                if len(tags) >= top_n:
+                    break
 
-        for token, _ in sorted_tokens:
-            if len(tags) >= top_n:
-                break
-
-            # Check for root similarity (avoid "extract", "extractor", "extraction")
-            root = token[:5] if len(token) > 5 else token
-            if root not in seen_roots:
-                tags.append(token)
-                seen_roots.add(root)
-
-        # If we don't have enough tags, relax the root similarity constraint
-        if len(tags) < top_n and len(sorted_tokens) > len(tags):
-            for token, _ in sorted_tokens:
-                if token not in tags and len(tags) < top_n:
+                # Check for root similarity to ensure diversity
+                root = token[:5] if len(token) > 5 else token
+                if root not in seen_roots:
                     tags.append(token)
+                    seen_roots.add(root)
 
-        return tags
+            # If we don't have enough tags, relax the root similarity constraint
+            if len(tags) < top_n and len(sorted_tokens) > len(tags):
+                for token, score in sorted_tokens:
+                    if token not in tags and len(tags) < top_n:
+                        tags.append(token)
+
+            return tags
+
+        except Exception:
+            # Fallback: return most common tokens if TF-IDF fails
+            aggregated = self._aggregate_community_tokens(comm_id)
+            all_tokens: Counter[str] = Counter()
+            for category, counter in aggregated.items():
+                all_tokens.update(counter)
+            return [token for token, _ in all_tokens.most_common(top_n)]
 
     def get_community_metrics(self, comm_id: int) -> Dict[str, Any]:
         """

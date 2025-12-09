@@ -4,16 +4,19 @@ Factory and convenience functions for community detection algorithms.
 
 from typing import Any, Dict, List, Optional, Set
 
-import networkx as nx
+import networkx as nx  # type: ignore
 
 from .base import CommunityDetectionAlgorithm
 from .community_detection import (
+    GirvanNewmanLibrary,
     GreedyModularityCommunityDetection,
     LabelPropagationCommunityDetection,
+    LouvainLibrary,
 )
 from .community_utils import CommunityAnalyzer, CommunityVisualizer
-from .girvan_newman import GirvanNewmanCommunityDetection
-from .louvain import LouvainCommunityDetection
+
+# from .girvan_newman import GirvanNewmanCommunityDetection
+# from .louvain import LouvainCommunityDetection
 
 
 class CommunityDetectionFactory:
@@ -22,10 +25,10 @@ class CommunityDetectionFactory:
     """
 
     _algorithms = {
-        "louvain": LouvainCommunityDetection,
+        "louvain": LouvainLibrary,
         "label_propagation": LabelPropagationCommunityDetection,
         "greedy_modularity": GreedyModularityCommunityDetection,
-        "girvan_newman": GirvanNewmanCommunityDetection,
+        "girvan_newman": GirvanNewmanLibrary,
     }
 
     @classmethod
